@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Real-Time Chat App - Frontend
 
-## Getting Started
+Веб-приложение чата с аутентификацией и реальным временем, где пользователи могут переписываться лично (DM) и общаться в групповых чатах.
 
-First, run the development server:
+## Технологии
 
+- **Next.js 16** - React фреймворк с App Router
+- **Apollo Client** - GraphQL клиент
+- **GraphQL** - API запросы и подписки
+- **WebSocket** (graphql-ws) - Real-time подписки
+- **TypeScript** - Типизация
+- **Tailwind CSS** - Стилизация
+
+## Функционал
+
+### Обязательный функционал (MVP)
+
+1. **Аутентификация**
+   - Регистрация (email/username + пароль)
+   - Вход
+   - Выход
+   - Защита приватных разделов
+
+2. **Пользователи**
+   - Список пользователей / поиск пользователей
+   - Возможность начать чат с другим пользователем
+
+3. **Личные сообщения (DM)**
+   - Чат "1 на 1" между двумя пользователями
+   - Сообщения приходят в реальном времени
+   - История сообщений сохраняется и подгружается
+
+4. **Групповые чаты**
+   - Создание группового чата: название + выбор участников
+   - Минимум 3 участника
+   - Сообщения приходят в реальном времени всем участникам
+   - Отображение участников группы
+   - История сообщений сохраняется и подгружается
+
+5. **Интерфейс**
+   - Страницы: Login / Signup
+   - Главная: список чатов (DM и Groups)
+   - Страница чата: список сообщений, поле ввода + отправка
+   - У сообщения видно автора и время
+
+### Бонус
+
+- Отправка изображений в чат (png/jpg/webp)
+- Превью изображений перед отправкой
+- Отображение изображений в сообщениях
+
+## Установка и запуск
+
+1. Установите зависимости:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Убедитесь, что бэкенд запущен на `http://localhost:4000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Запустите приложение:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Откройте браузер и перейдите на `http://localhost:3000`
 
-## Learn More
+## Структура проекта
 
-To learn more about Next.js, take a look at the following resources:
+```
+src/
+├── app/                    # Страницы Next.js
+│   ├── login/              # Страница входа
+│   ├── signup/             # Страница регистрации
+│   ├── chat/[id]/          # Страница чата
+│   └── page.tsx            # Главная страница (список чатов)
+├── components/             # React компоненты
+│   ├── protected-route.tsx    # Защита маршрутов
+│   ├── user-search.tsx         # Поиск пользователей
+│   ├── create-group-chat.tsx  # Создание группового чата
+│   ├── message-list.tsx       # Список сообщений
+│   └── message-input.tsx      # Ввод сообщений
+├── context/                # React контексты
+│   └── auth-context.tsx    # Контекст аутентификации
+├── graphql/                # GraphQL запросы
+│   ├── queries.ts          # GraphQL queries
+│   ├── mutations.ts        # GraphQL mutations
+│   └── subscriptions.ts    # GraphQL subscriptions
+├── hooks/                  # Custom hooks
+│   └── use-debounce.ts     # Debounce hook
+└── lib/                    # Утилиты
+    ├── apollo-client.ts    # Настройка Apollo Client
+    └── apollo-provider.tsx # Apollo Provider компонент
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API Endpoints
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### GraphQL
+- **URL**: `http://localhost:4000/graphql`
+- **WebSocket**: `ws://localhost:4000/graphql`
 
-## Deploy on Vercel
+### REST API
+- **Upload Image**: `POST http://localhost:4000/api/upload/image`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Демонстрация
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Для демонстрации работы приложения:
+
+1. Откройте приложение в трех разных браузерах/сессиях
+2. Зарегистрируйте трех пользователей (A, B, C)
+3. **DM**: Пользователь A создает DM с пользователем B, обмениваются минимум 3 сообщениями
+4. **Group**: Создайте групповой чат с участниками A, B, C, все отправляют сообщения
+5. Перезагрузите страницу у одного пользователя - история сообщений должна сохраниться
+
+## Особенности реализации
+
+- **Real-time обновления**: Используются GraphQL Subscriptions через WebSocket
+- **Кэширование**: Apollo Client кэширует запросы для оптимизации
+- **Защита маршрутов**: Приватные страницы защищены через `ProtectedRoute`
+- **Обработка ошибок**: Все ошибки обрабатываются и отображаются пользователю
+- **Валидация**: Валидация форм на клиенте и сервере
+- **Оптимистичные обновления**: Список чатов обновляется после создания нового чата
+
+## Требования
+
+- Node.js 18+
+- Бэкенд сервер на `http://localhost:4000`
