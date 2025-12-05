@@ -53,8 +53,9 @@ export default function SignupPage() {
 
       console.log('Registration response:', data);
 
-      if (data?.register?.token) {
-        localStorage.setItem('token', data.register.token);
+      const registerData = (data as any)?.register;
+      if (registerData?.token) {
+        localStorage.setItem('token', registerData.token);
         // Обновляем кеш Apollo Client и перенаправляем
         await apolloClient.resetStore();
         router.push('/');

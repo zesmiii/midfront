@@ -119,7 +119,7 @@ export default function ChatPage() {
     variables: { chatId },
     skip: !chatId,
     onData: ({ data }) => {
-      const newMessage = data.data?.messageAdded;
+      const newMessage = (data.data as any)?.messageAdded;
       if (newMessage) {
         setMessages((prev) => {
           // Avoid duplicates
@@ -132,7 +132,7 @@ export default function ChatPage() {
     },
   });
 
-  const chat = chatData?.chat;
+  const chat = (chatData as any)?.chat;
 
   const getChatName = () => {
     if (!chat) return 'Loading...';

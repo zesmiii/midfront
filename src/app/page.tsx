@@ -19,7 +19,7 @@ export default function HomePage() {
     pollInterval: 5000, // Poll every 5 seconds for new chats
   });
 
-  const chats = data?.chats || [];
+  const chats = (data as any)?.chats || [];
 
   const handleLogout = async () => {
     await logout();

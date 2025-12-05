@@ -37,8 +37,9 @@ export default function LoginPage() {
         },
       });
 
-      if (data?.login?.token) {
-        localStorage.setItem('token', data.login.token);
+      const loginData = (data as any)?.login;
+      if (loginData?.token) {
+        localStorage.setItem('token', loginData.token);
         // Обновляем кеш Apollo Client и перенаправляем
         await apolloClient.resetStore();
         router.push('/');
