@@ -19,7 +19,33 @@ const wsLink = new GraphQLWsLink(
       const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
       return {
         authorization: token ? `Bearer ${token}` : '',
+        // Альтернативный вариант для некоторых серверов
+        // token: token || '',
       };
+    },
+    shouldRetry: () => true,
+    retryAttempts: 5,
+    retryWait: async function* retryWait() {
+      for (let i = 0; i < 5; i++) {
+        yield i * 1000; // 0ms, 1s, 2s, 3s, 4s
+      }
+    },
+    on: {
+      opened: () => {
+        if (typeof window !== 'undefined') {
+          console.log('[WebSocket] Connection opened');
+        }
+      },
+      closed: () => {
+        if (typeof window !== 'undefined') {
+          console.log('[WebSocket] Connection closed');
+        }
+      },
+      error: (error) => {
+        if (typeof window !== 'undefined') {
+          console.error('[WebSocket] Connection error:', error);
+        }
+      },
     },
   })
 );
