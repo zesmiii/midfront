@@ -30,22 +30,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { data, loading, error, refetch } = useQuery(ME_QUERY, {
     skip: typeof window === 'undefined' || !localStorage.getItem('token'),
-    onCompleted: (data) => {
-      if (data?.me) {
-        setUser(data.me);
-      }
-    },
-    onError: () => {
-      localStorage.removeItem('token');
-      setUser(null);
-    },
   });
 
   const [logoutMutation] = useMutation(LOGOUT_MUTATION);
 
   useEffect(() => {
-    if (data?.me) {
-      setUser(data.me);
+    const me = (data as any)?.me;
+    if (me) {
+      setUser(me);
     } else if (error) {
       localStorage.removeItem('token');
       setUser(null);
@@ -56,9 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     if (token && refetch) {
       try {
-        const { data } = await refetch();
-        if (data?.me) {
-          setUser(data.me);
+        const result = await refetch();
+        const me = (result.data as any)?.me;
+        if (me) {
+          setUser(me);
         }
       } catch (err) {
         console.error('Error refetching user:', err);

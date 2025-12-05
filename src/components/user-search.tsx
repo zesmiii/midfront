@@ -27,16 +27,17 @@ export function UserSearch({ onClose, onChatCreated }: UserSearchProps) {
     refetchQueries: [{ query: GET_CHATS_QUERY }],
   });
 
-  const users = data?.users?.filter((u: any) => u.id !== user?.id) || [];
+  const users = ((data as any)?.users || []).filter((u: any) => u.id !== user?.id);
 
   const handleCreateDM = async (participantId: string) => {
     try {
       const { data: chatData } = await createDM({
         variables: { participantId },
       });
-      if (chatData?.createDM?.id) {
+      const createDMData = (chatData as any)?.createDM;
+      if (createDMData?.id) {
         onChatCreated();
-        router.push(`/chat/${chatData.createDM.id}`);
+        router.push(`/chat/${createDMData.id}`);
       }
     } catch (error: any) {
       const errorInfo = handleError(error);

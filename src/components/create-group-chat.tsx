@@ -29,7 +29,7 @@ export function CreateGroupChat({ onClose, onChatCreated }: CreateGroupChatProps
     refetchQueries: [{ query: GET_CHATS_QUERY }],
   });
 
-  const users = data?.users?.filter((u: any) => u.id !== user?.id && !selectedUsers.includes(u.id)) || [];
+  const users = ((data as any)?.users || []).filter((u: any) => u.id !== user?.id && !selectedUsers.includes(u.id));
 
   const toggleUser = (userId: string) => {
     setSelectedUsers((prev) =>
@@ -60,9 +60,10 @@ export function CreateGroupChat({ onClose, onChatCreated }: CreateGroupChatProps
           },
         },
       });
-      if (chatData?.createGroupChat?.id) {
+      const createGroupChatData = (chatData as any)?.createGroupChat;
+      if (createGroupChatData?.id) {
         onChatCreated();
-        router.push(`/chat/${chatData.createGroupChat.id}`);
+        router.push(`/chat/${createGroupChatData.id}`);
       }
     } catch (error: any) {
       const errorInfo = handleError(error);
@@ -95,7 +96,7 @@ export function CreateGroupChat({ onClose, onChatCreated }: CreateGroupChatProps
           <div className="text-xs font-medium text-gray-700">Selected ({selectedUsers.length}/2+):</div>
           <div className="flex flex-wrap gap-1">
             {selectedUsers.map((userId) => {
-              const user = data?.users?.find((u: any) => u.id === userId);
+              const user = ((data as any)?.users || []).find((u: any) => u.id === userId);
               return (
                 <span
                   key={userId}
