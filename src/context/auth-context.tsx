@@ -61,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [refetch]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       await logoutMutation();
     } catch (error) {
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(null);
       router.push('/login');
     }
-  };
+  }, [logoutMutation, router]);
 
   return (
     <AuthContext.Provider

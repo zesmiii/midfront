@@ -5,12 +5,13 @@ import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { useRouter, useParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
 import { useAuth } from '@/context/auth-context';
-import { GET_CHAT_QUERY, GET_MESSAGES_QUERY } from '@/graphql/queries';
+import { GET_CHAT_QUERY, GET_MESSAGES_QUERY, GET_CHATS_QUERY } from '@/graphql/queries';
 import { SEND_MESSAGE_MUTATION } from '@/graphql/mutations';
 import { MESSAGE_ADDED_SUBSCRIPTION } from '@/graphql/subscriptions';
 import { MessageInput } from '@/components/message-input';
 import { MessageList } from '@/components/message-list';
 import { handleError } from '@/lib/error-handler';
+import { apolloClient } from '@/lib/apollo-client';
 
 export default function ChatPage() {
   const params = useParams();
@@ -34,37 +35,56 @@ export default function ChatPage() {
 
   // Handle chat errors
   useEffect(() => {
-    if (chatError) {
-      const errorInfo = handleError(chatError);
-      if (errorInfo.shouldLogout) {
-        logout();
-        router.push('/login');
-      } else {
-        alert(errorInfo.message);
-      }
+    if (!chatError) return;
+    
+    const errorInfo = handleError(chatError);
+    if (errorInfo.shouldLogout) {
+      logout();
+    } else {
+      alert(errorInfo.message);
     }
-  }, [chatError, logout, router]);
+  }, [chatError, logout]);
 
-  // Handle messages errors
+  // Handle messages errors согласно документации
   useEffect(() => {
-    if (messagesError) {
-      const errorInfo = handleError(messagesError);
-      if (errorInfo.shouldLogout) {
-        logout();
-        router.push('/login');
-      } else {
-        alert(errorInfo.message);
-      }
+    if (!messagesError) return;
+    
+    const errorInfo = handleError(messagesError);
+    
+    // Обработка ошибок согласно документации
+    if (errorInfo.code === 'UNAUTHENTICATED') {
+      console.error('[Messages] Authentication required - logging out');
+      logout();
+    } else if (errorInfo.code === 'BAD_USER_INPUT') {
+      // "Chat not found"
+      console.error('[Messages] Chat not found:', chatId);
+      alert('Chat not found');
+      router.push('/');
+    } else if (errorInfo.code === 'FORBIDDEN') {
+      // "You are not a participant of this chat"
+      console.error('[Messages] Access forbidden - not a participant');
+      alert('You are not a participant of this chat');
+      router.push('/');
+    } else {
+      alert(errorInfo.message);
     }
-  }, [messagesError, logout, router]);
+  }, [messagesError, logout, router, chatId]);
 
-  // Handle messages data
+  // Handle messages data from cache
   useEffect(() => {
     const messages = (messagesData as any)?.messages;
-    if (Array.isArray(messages) && messages.length > 0) {
-      setMessages([...messages].reverse()); // Reverse to show oldest first
-      setHasMore(messages.length === MESSAGES_PER_PAGE);
-      setOffset(messages.length);
+    if (Array.isArray(messages)) {
+      // Сообщения приходят с сервера в хронологическом порядке (старые первыми)
+      // Оставляем их как есть - старые сверху, новые снизу
+      if (messages.length > 0) {
+        setMessages([...messages]);
+        setHasMore(messages.length === MESSAGES_PER_PAGE);
+        setOffset(messages.length);
+      } else {
+        setMessages([]);
+        setHasMore(false);
+        setOffset(0);
+      }
     }
   }, [messagesData]);
 
@@ -84,8 +104,8 @@ export default function ChatPage() {
 
       const messages = (result.data as any)?.messages;
       if (Array.isArray(messages) && messages.length > 0) {
-        const newMessages = [...messages].reverse();
-        setMessages((prev) => [...newMessages, ...prev]);
+        // Старые сообщения добавляем в начало (они старше текущих)
+        setMessages((prev) => [...messages, ...prev]);
         setHasMore(messages.length === MESSAGES_PER_PAGE);
         setOffset((prev) => prev + messages.length);
       } else {
@@ -114,20 +134,105 @@ export default function ChatPage() {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [hasMore, loadingMore, loadMoreMessages]);
 
-  // Real-time subscription
-  const { data: subscriptionData } = useSubscription(MESSAGE_ADDED_SUBSCRIPTION, {
+  // Real-time subscription with cache update
+  useSubscription(MESSAGE_ADDED_SUBSCRIPTION, {
     variables: { chatId },
     skip: !chatId,
     onData: ({ data }) => {
       const newMessage = (data.data as any)?.messageAdded;
       if (newMessage) {
-        setMessages((prev) => {
-          // Avoid duplicates
-          if (prev.some((m) => m.id === newMessage.id)) {
-            return prev;
+        console.log('[Subscription] New message received:', newMessage.id);
+
+        // Update messages cache
+        apolloClient.cache.updateQuery(
+          { query: GET_MESSAGES_QUERY, variables: { chatId, limit: MESSAGES_PER_PAGE, offset: 0 } },
+          (existing: any) => {
+            if (!existing || !existing.messages) {
+              // If cache is empty, initialize it
+              return { messages: [newMessage] };
+            }
+
+            // Check for duplicates
+            const exists = existing.messages.some((msg: any) => msg.id === newMessage.id);
+            if (exists) {
+              console.log('[Subscription] Message already exists, skipping:', newMessage.id);
+              return existing;
+            }
+
+            console.log('[Subscription] Adding message to cache:', newMessage.id);
+            // Новое сообщение добавляем в конец (оно самое новое)
+            return {
+              messages: [...existing.messages, newMessage],
+            };
           }
-          return [...prev, newMessage];
-        });
+        );
+
+        // Update chats cache to update lastMessage
+        apolloClient.cache.updateQuery(
+          { query: GET_CHATS_QUERY },
+          (existing: any) => {
+            if (!existing || !existing.chats) return existing;
+
+            return {
+              chats: existing.chats.map((chat: any) => {
+                if (chat.id === chatId) {
+                  return {
+                    ...chat,
+                    lastMessage: {
+                      id: newMessage.id,
+                      content: newMessage.content,
+                      imageUrl: newMessage.imageUrl,
+                      sender: newMessage.sender,
+                      createdAt: newMessage.createdAt,
+                    },
+                    updatedAt: newMessage.updatedAt || newMessage.createdAt || new Date().toISOString(),
+                  };
+                }
+                return chat;
+              }),
+            };
+          }
+        );
+      }
+    },
+    onError: (error) => {
+      console.error('[Subscription] Error:', error);
+
+      // Проверяем, является ли это WebSocket ошибкой
+      const errorMessage = error?.message || '';
+      const errorString = error?.toString() || '';
+
+      // Проверяем на Protocol Error 1002
+      if (errorMessage.includes('1002') || errorString.includes('1002') || errorMessage.includes('Socket closed with event 1002')) {
+        console.error('[Subscription] ❌ WebSocket Protocol Error (1002) detected');
+        console.error('[Subscription] This usually means:');
+        console.error('  1. Invalid connectionParams format');
+        console.error('  2. Server expects different authentication format');
+        console.error('  3. Token format is incorrect');
+        console.error('[Subscription] Current token:', typeof window !== 'undefined' ? localStorage.getItem('token')?.substring(0, 20) + '...' : 'N/A');
+
+        // Не показываем alert для Protocol Error - это техническая ошибка
+        // Пользователь увидит, что сообщения не приходят
+        return;
+      }
+
+      const errorInfo = handleError(error);
+
+      // Обработка ошибок согласно документации
+      if (errorInfo.code === 'UNAUTHENTICATED') {
+        console.error('[Subscription] Authentication required - token is invalid or missing');
+        console.error('[Subscription] Logging out...');
+        logout();
+        router.push('/login');
+      } else if (errorInfo.code === 'FORBIDDEN') {
+        console.error('[Subscription] Access forbidden - not a participant of this chat');
+        alert('You are not a participant of this chat');
+      } else if (errorInfo.code === 'BAD_USER_INPUT') {
+        console.error('[Subscription] Chat not found:', chatId);
+        alert('Chat not found');
+      } else {
+        console.error('[Subscription] Unknown error:', errorInfo.message);
+        console.error('[Subscription] Full error object:', error);
       }
     },
   });

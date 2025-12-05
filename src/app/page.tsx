@@ -19,6 +19,7 @@ export default function HomePage() {
     pollInterval: 5000, // Poll every 5 seconds for new chats
   });
 
+  // Чаты без сортировки - остаются в том порядке, как приходят с сервера
   const chats = (data as any)?.chats || [];
 
   const handleLogout = async () => {

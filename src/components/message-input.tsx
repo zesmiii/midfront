@@ -3,9 +3,10 @@
 import { useState, useRef } from 'react';
 import { useMutation } from '@apollo/client/react';
 import { SEND_MESSAGE_MUTATION } from '@/graphql/mutations';
-import { GET_CHATS_QUERY } from '@/graphql/queries';
+import { GET_CHATS_QUERY, GET_MESSAGES_QUERY } from '@/graphql/queries';
 import { uploadImage } from '@/lib/image-upload';
 import { handleError } from '@/lib/error-handler';
+import { apolloClient } from '@/lib/apollo-client';
 
 interface MessageInputProps {
   chatId: string;
@@ -18,11 +19,63 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sendMessage] = useMutation(SEND_MESSAGE_MUTATION, {
-    refetchQueries: [{ query: GET_CHATS_QUERY }],
+    // Update cache after sending message
+    update: (cache, { data }) => {
+      const sentMessage = (data as any)?.sendMessage;
+      if (sentMessage) {
+        // Update messages cache
+        cache.updateQuery(
+          { query: GET_MESSAGES_QUERY, variables: { chatId, limit: 50, offset: 0 } },
+          (existing: any) => {
+            if (!existing || !existing.messages) return existing;
+
+            // Check for duplicates
+            const exists = existing.messages.some((msg: any) => msg.id === sentMessage.id);
+            if (exists) return existing;
+
+            // Новое сообщение добавляем в конец (оно самое новое)
+            return {
+              messages: [...existing.messages, sentMessage],
+            };
+          }
+        );
+
+        // Update chats cache to update lastMessage
+        cache.updateQuery(
+          { query: GET_CHATS_QUERY },
+          (existing: any) => {
+            if (!existing || !existing.chats) return existing;
+
+            return {
+              chats: existing.chats.map((chat: any) => {
+                if (chat.id === chatId) {
+                  return {
+                    ...chat,
+                    lastMessage: {
+                      id: sentMessage.id,
+                      content: sentMessage.content,
+                      imageUrl: sentMessage.imageUrl,
+                      sender: sentMessage.sender,
+                      createdAt: sentMessage.createdAt,
+                    },
+                    updatedAt: sentMessage.updatedAt || sentMessage.createdAt || new Date().toISOString(),
+                  };
+                }
+                return chat;
+              }),
+            };
+          }
+        );
+      }
+    },
   });
 
   const handleSend = async () => {
-    if (!content.trim() && !imageFile) return;
+    // Валидация: должен быть хотя бы content или imageFile
+    if (!content.trim() && !imageFile) {
+      alert('Message must have content or image');
+      return;
+    }
 
     try {
       setUploading(true);
@@ -33,14 +86,25 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
         imageUrl = await uploadImage(imageFile);
       }
 
+      // Prepare input - не передаем null, если поле пустое
+      const input: any = {
+        chatId,
+      };
+      
+      // Добавляем content только если он есть
+      if (content.trim()) {
+        input.content = content.trim();
+      }
+      
+      // Добавляем imageUrl только если он есть
+      if (imageUrl) {
+        input.imageUrl = imageUrl;
+      }
+
       // Send message
       await sendMessage({
         variables: {
-          input: {
-            chatId,
-            content: content.trim() || null,
-            imageUrl,
-          },
+          input,
         },
       });
 
@@ -52,7 +116,19 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
       onMessageSent();
     } catch (error: any) {
       const errorInfo = handleError(error);
-      alert(errorInfo.message);
+      
+      // Специфичная обработка ошибок согласно документации
+      if (errorInfo.code === 'UNAUTHENTICATED') {
+        alert('Authentication required. Please login again.');
+        // Можно добавить автоматический logout
+      } else if (errorInfo.code === 'BAD_USER_INPUT') {
+        // Может быть "Message must have content or image" или "Chat not found"
+        alert(errorInfo.message);
+      } else if (errorInfo.code === 'FORBIDDEN') {
+        alert('You are not a participant of this chat');
+      } else {
+        alert(errorInfo.message || 'Failed to send message');
+      }
     } finally {
       setUploading(false);
     }

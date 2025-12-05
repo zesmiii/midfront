@@ -9,6 +9,7 @@ export const MESSAGE_ADDED_SUBSCRIPTION = gql`
       sender {
         id
         username
+        email
       }
       chat {
         id
