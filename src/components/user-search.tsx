@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { SEARCH_USERS_QUERY, GET_CHATS_QUERY } from '@/graphql/queries';
 import { CREATE_DM_MUTATION } from '@/graphql/mutations';
 import { useAuth } from '@/context/auth-context';
+import { handleError } from '@/lib/error-handler';
 
 interface UserSearchProps {
   onClose: () => void;
@@ -38,7 +39,8 @@ export function UserSearch({ onClose, onChatCreated }: UserSearchProps) {
         router.push(`/chat/${chatData.createDM.id}`);
       }
     } catch (error: any) {
-      alert(error.message || 'Failed to create DM');
+      const errorInfo = handleError(error);
+      alert(errorInfo.message);
     }
   };
 

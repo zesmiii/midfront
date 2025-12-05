@@ -5,6 +5,7 @@ import { useMutation } from '@apollo/client/react';
 import { SEND_MESSAGE_MUTATION } from '@/graphql/mutations';
 import { GET_CHATS_QUERY } from '@/graphql/queries';
 import { uploadImage } from '@/lib/image-upload';
+import { handleError } from '@/lib/error-handler';
 
 interface MessageInputProps {
   chatId: string;
@@ -50,7 +51,8 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
       }
       onMessageSent();
     } catch (error: any) {
-      alert(error.message || 'Failed to send message');
+      const errorInfo = handleError(error);
+      alert(errorInfo.message);
     } finally {
       setUploading(false);
     }

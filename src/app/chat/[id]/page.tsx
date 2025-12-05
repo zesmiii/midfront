@@ -26,44 +26,55 @@ export default function ChatPage() {
 
   const { data: chatData, loading: chatLoading, error: chatError } = useQuery(GET_CHAT_QUERY, {
     variables: { id: chatId },
-    onError: (error) => {
-      const errorInfo = handleError(error);
-      if (errorInfo.shouldLogout) {
-        logout();
-        router.push('/login');
-      } else {
-        alert(errorInfo.message);
-      }
-    },
   });
 
-  const { data: messagesData, loading: messagesLoading, fetchMore } = useQuery(GET_MESSAGES_QUERY, {
+  const { data: messagesData, loading: messagesLoading, error: messagesError, fetchMore } = useQuery(GET_MESSAGES_QUERY, {
     variables: { chatId, limit: MESSAGES_PER_PAGE, offset: 0 },
-    onCompleted: (data) => {
-      if (data?.messages) {
-        setMessages([...data.messages].reverse()); // Reverse to show oldest first
-        setHasMore(data.messages.length === MESSAGES_PER_PAGE);
-        setOffset(data.messages.length);
-      }
-    },
-    onError: (error) => {
-      const errorInfo = handleError(error);
+  });
+
+  // Handle chat errors
+  useEffect(() => {
+    if (chatError) {
+      const errorInfo = handleError(chatError);
       if (errorInfo.shouldLogout) {
         logout();
         router.push('/login');
       } else {
         alert(errorInfo.message);
       }
-    },
-  });
+    }
+  }, [chatError, logout, router]);
+
+  // Handle messages errors
+  useEffect(() => {
+    if (messagesError) {
+      const errorInfo = handleError(messagesError);
+      if (errorInfo.shouldLogout) {
+        logout();
+        router.push('/login');
+      } else {
+        alert(errorInfo.message);
+      }
+    }
+  }, [messagesError, logout, router]);
+
+  // Handle messages data
+  useEffect(() => {
+    const messages = (messagesData as any)?.messages;
+    if (Array.isArray(messages) && messages.length > 0) {
+      setMessages([...messages].reverse()); // Reverse to show oldest first
+      setHasMore(messages.length === MESSAGES_PER_PAGE);
+      setOffset(messages.length);
+    }
+  }, [messagesData]);
 
   // Load more messages when scrolling to top
-  const loadMoreMessages = async () => {
+  const loadMoreMessages = useCallback(async () => {
     if (loadingMore || !hasMore || !fetchMore) return;
 
     setLoadingMore(true);
     try {
-      const { data } = await fetchMore({
+      const result = await fetchMore({
         variables: {
           chatId,
           limit: MESSAGES_PER_PAGE,
@@ -71,11 +82,12 @@ export default function ChatPage() {
         },
       });
 
-      if (data?.messages && data.messages.length > 0) {
-        const newMessages = [...data.messages].reverse();
+      const messages = (result.data as any)?.messages;
+      if (Array.isArray(messages) && messages.length > 0) {
+        const newMessages = [...messages].reverse();
         setMessages((prev) => [...newMessages, ...prev]);
-        setHasMore(data.messages.length === MESSAGES_PER_PAGE);
-        setOffset((prev) => prev + data.messages.length);
+        setHasMore(messages.length === MESSAGES_PER_PAGE);
+        setOffset((prev) => prev + messages.length);
       } else {
         setHasMore(false);
       }
@@ -85,7 +97,7 @@ export default function ChatPage() {
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [loadingMore, hasMore, fetchMore, chatId, offset]);
 
   // Handle scroll to top for pagination
   useEffect(() => {
@@ -100,7 +112,7 @@ export default function ChatPage() {
 
     container.addEventListener('scroll', handleScroll);
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [hasMore, loadingMore, offset]);
+  }, [hasMore, loadingMore, loadMoreMessages]);
 
   // Real-time subscription
   const { data: subscriptionData } = useSubscription(MESSAGE_ADDED_SUBSCRIPTION, {

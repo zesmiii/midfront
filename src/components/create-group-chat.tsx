@@ -7,6 +7,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { SEARCH_USERS_QUERY, GET_CHATS_QUERY } from '@/graphql/queries';
 import { CREATE_GROUP_CHAT_MUTATION } from '@/graphql/mutations';
 import { useAuth } from '@/context/auth-context';
+import { handleError } from '@/lib/error-handler';
 
 interface CreateGroupChatProps {
   onClose: () => void;
@@ -64,7 +65,8 @@ export function CreateGroupChat({ onClose, onChatCreated }: CreateGroupChatProps
         router.push(`/chat/${chatData.createGroupChat.id}`);
       }
     } catch (error: any) {
-      alert(error.message || 'Failed to create group chat');
+      const errorInfo = handleError(error);
+      alert(errorInfo.message);
     }
   };
 
