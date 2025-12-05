@@ -18,6 +18,20 @@ export const SEARCH_USERS_QUERY = gql`
       id
       username
       email
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_USER_QUERY = gql`
+  query GetUser($id: ID!) {
+    user(id: $id) {
+      id
+      username
+      email
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -41,6 +55,10 @@ export const GET_CHATS_QUERY = gql`
         id
         content
         imageUrl
+        sender {
+          id
+          username
+        }
         createdAt
       }
       createdAt
@@ -68,8 +86,14 @@ export const GET_CHAT_QUERY = gql`
         id
         content
         imageUrl
+        sender {
+          id
+          username
+        }
         createdAt
       }
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -88,6 +112,10 @@ export const GET_MESSAGES_QUERY = gql`
         id
         name
         type
+        participants {
+          id
+          username
+        }
       }
       createdAt
       updatedAt

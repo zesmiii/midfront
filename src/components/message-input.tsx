@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useMutation } from '@apollo/client/react';
 import { SEND_MESSAGE_MUTATION } from '@/graphql/mutations';
 import { GET_CHATS_QUERY } from '@/graphql/queries';
+import { uploadImage } from '@/lib/image-upload';
 
 interface MessageInputProps {
   chatId: string;
@@ -28,24 +29,7 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
 
       // Upload image if present
       if (imageFile) {
-        const token = localStorage.getItem('token');
-        const formData = new FormData();
-        formData.append('image', imageFile);
-
-        const uploadResponse = await fetch('http://localhost:4000/api/upload/image', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload image');
-        }
-
-        const uploadData = await uploadResponse.json();
-        imageUrl = uploadData.imageUrl;
+        imageUrl = await uploadImage(imageFile);
       }
 
       // Send message
@@ -83,8 +67,9 @@ export function MessageInput({ chatId, onMessageSent }: MessageInputProps) {
     const file = e.target.files?.[0];
     if (file) {
       // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+      const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        alert('Only .png, .jpg, .jpeg, .webp images are allowed');
         return;
       }
       // Validate file size (5MB)

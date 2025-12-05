@@ -38,12 +38,19 @@ export const CREATE_DM_MUTATION = gql`
   mutation CreateDM($participantId: ID!) {
     createDM(participantId: $participantId) {
       id
+      name
       type
       participants {
         id
         username
+        email
+      }
+      createdBy {
+        id
+        username
       }
       createdAt
+      updatedAt
     }
   }
 `;
@@ -57,12 +64,14 @@ export const CREATE_GROUP_CHAT_MUTATION = gql`
       participants {
         id
         username
+        email
       }
       createdBy {
         id
         username
       }
       createdAt
+      updatedAt
     }
   }
 `;
@@ -80,8 +89,14 @@ export const SEND_MESSAGE_MUTATION = gql`
       chat {
         id
         name
+        type
+        participants {
+          id
+          username
+        }
       }
       createdAt
+      updatedAt
     }
   }
 `;

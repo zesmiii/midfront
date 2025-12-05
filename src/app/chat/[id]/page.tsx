@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useSubscription } from '@apollo/client/react';
 import { useRouter, useParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/protected-route';
@@ -10,26 +10,97 @@ import { SEND_MESSAGE_MUTATION } from '@/graphql/mutations';
 import { MESSAGE_ADDED_SUBSCRIPTION } from '@/graphql/subscriptions';
 import { MessageInput } from '@/components/message-input';
 import { MessageList } from '@/components/message-list';
+import { handleError } from '@/lib/error-handler';
 
 export default function ChatPage() {
   const params = useParams();
   const chatId = params.id as string;
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [offset, setOffset] = useState(0);
+  const MESSAGES_PER_PAGE = 50;
 
-  const { data: chatData, loading: chatLoading } = useQuery(GET_CHAT_QUERY, {
+  const { data: chatData, loading: chatLoading, error: chatError } = useQuery(GET_CHAT_QUERY, {
     variables: { id: chatId },
-  });
-
-  const { data: messagesData, loading: messagesLoading } = useQuery(GET_MESSAGES_QUERY, {
-    variables: { chatId, limit: 100, offset: 0 },
-    onCompleted: (data) => {
-      if (data?.messages) {
-        setMessages([...data.messages].reverse()); // Reverse to show oldest first
+    onError: (error) => {
+      const errorInfo = handleError(error);
+      if (errorInfo.shouldLogout) {
+        logout();
+        router.push('/login');
+      } else {
+        alert(errorInfo.message);
       }
     },
   });
+
+  const { data: messagesData, loading: messagesLoading, fetchMore } = useQuery(GET_MESSAGES_QUERY, {
+    variables: { chatId, limit: MESSAGES_PER_PAGE, offset: 0 },
+    onCompleted: (data) => {
+      if (data?.messages) {
+        setMessages([...data.messages].reverse()); // Reverse to show oldest first
+        setHasMore(data.messages.length === MESSAGES_PER_PAGE);
+        setOffset(data.messages.length);
+      }
+    },
+    onError: (error) => {
+      const errorInfo = handleError(error);
+      if (errorInfo.shouldLogout) {
+        logout();
+        router.push('/login');
+      } else {
+        alert(errorInfo.message);
+      }
+    },
+  });
+
+  // Load more messages when scrolling to top
+  const loadMoreMessages = async () => {
+    if (loadingMore || !hasMore || !fetchMore) return;
+
+    setLoadingMore(true);
+    try {
+      const { data } = await fetchMore({
+        variables: {
+          chatId,
+          limit: MESSAGES_PER_PAGE,
+          offset: offset,
+        },
+      });
+
+      if (data?.messages && data.messages.length > 0) {
+        const newMessages = [...data.messages].reverse();
+        setMessages((prev) => [...newMessages, ...prev]);
+        setHasMore(data.messages.length === MESSAGES_PER_PAGE);
+        setOffset((prev) => prev + data.messages.length);
+      } else {
+        setHasMore(false);
+      }
+    } catch (error) {
+      const errorInfo = handleError(error);
+      alert(errorInfo.message);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // Handle scroll to top for pagination
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (container.scrollTop === 0 && hasMore && !loadingMore) {
+        loadMoreMessages();
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [hasMore, loadingMore, offset]);
 
   // Real-time subscription
   const { data: subscriptionData } = useSubscription(MESSAGE_ADDED_SUBSCRIPTION, {
@@ -78,12 +149,15 @@ export default function ChatPage() {
     );
   }
 
-  if (!chat) {
+  if (chatError || !chat) {
+    const errorInfo = chatError ? handleError(chatError) : null;
     return (
       <ProtectedRoute>
         <div className="flex h-screen items-center justify-center">
           <div className="text-center">
-            <div className="text-lg text-gray-600 mb-4">Chat not found</div>
+            <div className="text-lg text-gray-600 mb-4">
+              {errorInfo?.message || 'Chat not found'}
+            </div>
             <button
               onClick={() => router.push('/')}
               className="rounded-md bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
@@ -142,7 +216,14 @@ export default function ChatPage() {
           )}
 
           {/* Messages */}
-          <MessageList messages={messages} currentUserId={user?.id} />
+          <div ref={messagesContainerRef} className="flex-1 overflow-y-auto">
+            {loadingMore && (
+              <div className="p-4 text-center text-sm text-gray-500">
+                Loading older messages...
+              </div>
+            )}
+            <MessageList messages={messages} currentUserId={user?.id} />
+          </div>
 
           {/* Message Input */}
           <MessageInput chatId={chatId} onMessageSent={() => {}} />

@@ -14,8 +14,13 @@ export const MESSAGE_ADDED_SUBSCRIPTION = gql`
         id
         name
         type
+        participants {
+          id
+          username
+        }
       }
       createdAt
+      updatedAt
     }
   }
 `;

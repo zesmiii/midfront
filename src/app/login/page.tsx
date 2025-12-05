@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LOGIN_MUTATION } from '@/graphql/mutations';
 import { useAuth } from '@/context/auth-context';
+import { apolloClient } from '@/lib/apollo-client';
+import { handleError } from '@/lib/error-handler';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,42 +39,19 @@ export default function LoginPage() {
 
       if (data?.login?.token) {
         localStorage.setItem('token', data.login.token);
+        // Обновляем кеш Apollo Client и перенаправляем
+        await apolloClient.resetStore();
         router.push('/');
         router.refresh();
       }
     } catch (err: any) {
-      // Извлекаем сообщение об ошибке из GraphQL ответа
-      let errorMessage = 'Login failed. Please check your credentials.';
+      const errorInfo = handleError(err);
+      setError(errorInfo.message);
       
-      // Проверяем graphQLErrors (основной источник ошибок от GraphQL сервера)
-      if (err.graphQLErrors && Array.isArray(err.graphQLErrors) && err.graphQLErrors.length > 0) {
-        errorMessage = err.graphQLErrors[0].message || errorMessage;
-      } 
-      // Проверяем networkError (ошибки сети)
-      else if (err.networkError) {
-        errorMessage = err.networkError.message || 'Network error. Please check your connection.';
-      } 
-      // Проверяем message напрямую (для CombinedGraphQLErrors и других форматов)
-      else if (err.message) {
-        // Если сообщение содержит текст об ошибке, извлекаем его
-        if (err.message.includes('Invalid email or password')) {
-          errorMessage = 'Invalid email or password';
-        } else if (err.message.includes('CombinedGraphQLErrors:')) {
-          // Извлекаем сообщение после "CombinedGraphQLErrors: "
-          const match = err.message.match(/CombinedGraphQLErrors:\s*(.+)/i);
-          errorMessage = match ? match[1].trim() : err.message;
-        } else {
-          errorMessage = err.message;
-        }
+      if (errorInfo.shouldLogout) {
+        localStorage.removeItem('token');
+        router.push('/login');
       }
-      
-      setError(errorMessage);
-      console.error('Login error details:', {
-        graphQLErrors: err.graphQLErrors,
-        networkError: err.networkError,
-        message: err.message,
-        fullError: err
-      });
     }
   };
 

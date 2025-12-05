@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { useQuery, useMutation } from '@apollo/client/react';
 import { useRouter } from 'next/navigation';
 import { ME_QUERY } from '@/graphql/queries';
@@ -19,6 +19,8 @@ interface AuthContextType {
   loading: boolean;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
+  refetchUser: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -26,7 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
-  const { data, loading, error } = useQuery(ME_QUERY, {
+  const { data, loading, error, refetch } = useQuery(ME_QUERY, {
     skip: typeof window === 'undefined' || !localStorage.getItem('token'),
     onCompleted: (data) => {
       if (data?.me) {
@@ -50,6 +52,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [data, error]);
 
+  const refetchUser = useCallback(async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (token && refetch) {
+      try {
+        const { data } = await refetch();
+        if (data?.me) {
+          setUser(data.me);
+        }
+      } catch (err) {
+        console.error('Error refetching user:', err);
+        localStorage.removeItem('token');
+        setUser(null);
+      }
+    }
+  }, [refetch]);
+
   const logout = async () => {
     try {
       await logoutMutation();
@@ -69,6 +87,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         logout,
         isAuthenticated: !!user,
+        refetchUser,
+        setUser,
       }}
     >
       {children}

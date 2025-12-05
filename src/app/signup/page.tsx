@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { REGISTER_MUTATION } from '@/graphql/mutations';
 import { useAuth } from '@/context/auth-context';
+import { apolloClient } from '@/lib/apollo-client';
+import { handleError } from '@/lib/error-handler';
 
 export default function SignupPage() {
   const [username, setUsername] = useState('');
@@ -53,42 +55,14 @@ export default function SignupPage() {
 
       if (data?.register?.token) {
         localStorage.setItem('token', data.register.token);
+        // Обновляем кеш Apollo Client и перенаправляем
+        await apolloClient.resetStore();
         router.push('/');
         router.refresh();
       }
     } catch (err: any) {
-      // Извлекаем сообщение об ошибке из GraphQL ответа
-      let errorMessage = 'Registration failed. Please try again.';
-      
-      // Проверяем graphQLErrors (основной источник ошибок от GraphQL сервера)
-      if (err.graphQLErrors && Array.isArray(err.graphQLErrors) && err.graphQLErrors.length > 0) {
-        errorMessage = err.graphQLErrors[0].message || errorMessage;
-      } 
-      // Проверяем networkError (ошибки сети)
-      else if (err.networkError) {
-        errorMessage = err.networkError.message || 'Network error. Please check your connection.';
-      } 
-      // Проверяем message напрямую (для CombinedGraphQLErrors и других форматов)
-      else if (err.message) {
-        // Если сообщение содержит текст об ошибке, извлекаем его
-        if (err.message.includes('User with this email or username already exists')) {
-          errorMessage = 'User with this email or username already exists';
-        } else if (err.message.includes('CombinedGraphQLErrors:')) {
-          // Извлекаем сообщение после "CombinedGraphQLErrors: "
-          const match = err.message.match(/CombinedGraphQLErrors:\s*(.+)/i);
-          errorMessage = match ? match[1].trim() : err.message;
-        } else {
-          errorMessage = err.message;
-        }
-      }
-      
-      setError(errorMessage);
-      console.error('Registration error details:', {
-        graphQLErrors: err.graphQLErrors,
-        networkError: err.networkError,
-        message: err.message,
-        fullError: err
-      });
+      const errorInfo = handleError(err);
+      setError(errorInfo.message);
     }
   };
 
